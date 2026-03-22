@@ -116,11 +116,11 @@ jobs:
           load: true
           tags: ${{ env.ECR_REPOSITORY }}:latest
           labels: ${{ steps.meta.outputs.labels }}
-      
-      - name: "📦 Debug: List Docker Images"
-        run: docker images
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: "📦 Debug: List Docker Images"
+        run: docker images
 
       - name: "🔍 Trivy Vulnerability Scan"
         uses: aquasecurity/trivy-action@master
