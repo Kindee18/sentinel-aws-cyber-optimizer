@@ -12,7 +12,7 @@ WORKDIR /build
 
 # Install only production dependencies
 COPY lambda/requirements.txt .
-RUN pip install --no-cache-dir --target=/build/deps -r requirements.txt 2>/dev/null || true
+RUN pip install --no-cache-dir --target=/build/deps -r requirements.txt || true
 
 # Copy application code
 COPY lambda/log_transformer.py .
@@ -45,7 +45,7 @@ RUN groupadd -r appuser && \
 WORKDIR /app
 
 # Copy dependencies from builder stage
-COPY --from=builder /build/deps/ /usr/local/lib/python3.12/site-packages/ 2>/dev/null || true
+COPY --from=builder /build/deps/ /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /build/log_transformer.py .
 
 # Security: Set file ownership

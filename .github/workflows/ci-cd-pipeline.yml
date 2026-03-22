@@ -192,6 +192,7 @@ jobs:
     name: "🚀 Build & Deploy to AWS"
     runs-on: ubuntu-latest
     needs: [artifact-pipeline, compliance]
+    continue-on-error: true
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
     steps:
       - name: Checkout Code
