@@ -66,6 +66,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -119,7 +121,7 @@ jobs:
             trivy-results.sarif
 
       - name: "📦 Upload SBOM to S3"
-        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
+        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && env.AWS_ROLE_ARN != ''
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -127,7 +129,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: S3 Copy
-        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
+        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && env.AWS_ROLE_ARN != ''
         continue-on-error: true
         run: |
           aws s3 cp sentinel-optimizer-sbom.json \
@@ -197,20 +199,24 @@ jobs:
     name: "🚀 Build & Deploy to AWS"
     runs-on: ubuntu-latest
     needs: [artifact-pipeline, compliance]
-    continue-on-error: true
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Configure AWS Credentials
+        if: env.AWS_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Login to Amazon ECR
+        if: env.AWS_ROLE_ARN != ''
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build, tag, and push image to Amazon ECR
+        if: env.AWS_ROLE_ARN != ''
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -222,7 +228,9 @@ jobs:
             $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
       - name: Update Kubeconfig
+        if: env.AWS_ROLE_ARN != ''
         run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }}
       - name: Deploy to EKS
+        if: env.AWS_ROLE_ARN != ''
         run: |
           kubectl apply -f kubernetes/logging-agent/
