@@ -1,0 +1,6 @@
+# Lambda function only uses Python standard library
+# No additional dependencies required for deployment
+#
+# For local development and testing:
+# pytest>=7.0
+# pytest-cov>=4.0

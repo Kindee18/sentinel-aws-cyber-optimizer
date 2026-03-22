@@ -1,0 +1,14 @@
+# =============================================================================
+# Kubernetes Logging Agent — Namespace
+# Dedicated namespace for log collection infrastructure
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  labels:
+    name: logging
+    app.kubernetes.io/part-of: sentinel-cyber-optimizer
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    purpose: "Centralized log collection and forwarding"

@@ -1,0 +1,38 @@
+# =============================================================================
+# Kubernetes Network Policy — Fluent Bit
+# Restricts ingress/egress for the logging agent
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fluent-bit
+  namespace: logging
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fluent-bit
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  # Allow ingress only for metrics on port 2020 (e.g. from Prometheus)
+  ingress:
+    - from:
+        - namespaceSelector: {} # Allow from all namespaces for monitoring
+      ports:
+        - protocol: TCP
+          port: 2020
+
+  # Allow egress to AWS services (Firehose/Kinesis) and DNS
+  egress:
+    - to:
+        - ipBlock: # Allow outbound internet/AWS API
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - namespaceSelector: {} # DNS lookup
+      ports:
+        - protocol: UDP
+          port: 53

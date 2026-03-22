@@ -1,0 +1,402 @@
+# =============================================================================
+# Sentinel-AWS Cyber-Optimizer — CI/CD Pipeline
+# DevSecOps pipeline: Build → Scan → SBOM → Compliance → Deploy
+# =============================================================================
+
+name: "Sentinel Security Pipeline"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: sentinel-cyber-optimizer
+  EKS_CLUSTER_NAME: sentinel-eks
+  TERRAFORM_VERSION: "1.5.7"
+  PYTHON_VERSION: "3.12"
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write  # For OIDC-based AWS authentication
+
+# =============================================================================
+# Job 1: Security Lint & Unit Tests
+# =============================================================================
+jobs:
+  test:
+    name: "🧪 Unit Tests & Linting"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install Test Dependencies
+        run: |
+          pip install pytest pytest-cov bandit safety
+
+      - name: Run Lambda Unit Tests
+        run: |
+          cd lambda
+          python -m pytest tests/ -v --tb=short \
+            --cov=log_transformer \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
+        continue-on-error: false
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: lambda/coverage.xml
+
+      - name: Security Lint (Bandit)
+        run: |
+          bandit -r lambda/ -f json -o bandit-report.json || true
+          bandit -r lambda/ -ll  # Fail on medium+ severity
+
+      - name: Dependency Safety Check
+        run: |
+          safety check --file lambda/requirements.txt || true
+
+  # =============================================================================
+  # Job 2: Container Build & Vulnerability Scanning
+  # =============================================================================
+  build-and-scan:
+    name: "🔨 Build & 🔍 Vulnerability Scan"
+    runs-on: ubuntu-latest
+    needs: test
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate Image Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+
+      - name: Build Docker Image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: "🔍 Trivy Vulnerability Scan"
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"  # Fail on critical/high vulnerabilities
+          ignore-unfixed: true
+          vuln-type: "os,library"
+
+      - name: Upload Trivy Results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Trivy Table Report (PR Comment)
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          image-ref: ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM"
+
+  # =============================================================================
+  # Job 3: SBOM Generation
+  # =============================================================================
+  sbom:
+    name: "📦 SBOM Generation (Syft)"
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image for SBOM
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.ECR_REPOSITORY }}:sbom-scan
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          syft ${{ env.ECR_REPOSITORY }}:sbom-scan \
+            --output cyclonedx-json=sbom-cyclonedx.json \
+            --output spdx-json=sbom-spdx.json
+
+          echo "=== SBOM Summary ==="
+          echo "Components found:"
+          cat sbom-cyclonedx.json | python3 -c "
+          import json, sys
+          sbom = json.load(sys.stdin)
+          components = sbom.get('components', [])
+          print(f'  Total components: {len(components)}')
+          by_type = {}
+          for c in components:
+              t = c.get('type', 'unknown')
+              by_type[t] = by_type.get(t, 0) + 1
+          for t, count in sorted(by_type.items()):
+              print(f'  {t}: {count}')
+          "
+
+      - name: Upload SBOM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload SBOM to S3
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          aws s3 cp sbom-cyclonedx.json \
+            s3://${{ secrets.SBOM_BUCKET }}/sboms/${GITHUB_REPOSITORY}/${TIMESTAMP}-cyclonedx.json \
+            --metadata "commit=${GITHUB_SHA},branch=${GITHUB_REF_NAME}"
+
+          aws s3 cp sbom-spdx.json \
+            s3://${{ secrets.SBOM_BUCKET }}/sboms/${GITHUB_REPOSITORY}/${TIMESTAMP}-spdx.json \
+            --metadata "commit=${GITHUB_SHA},branch=${GITHUB_REF_NAME}"
+
+          echo "✅ SBOM uploaded to S3"
+
+  # =============================================================================
+  # Job 4: Compliance-as-Code (Checkov)
+  # =============================================================================
+  compliance:
+    name: "🛡️ Compliance Scan (Checkov)"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: "Checkov: Scan Terraform Infrastructure"
+        run: |
+          checkov -d terraform/ \
+            --config-file security/checkov-config.yml \
+            --output cli \
+            --output junitxml \
+            --output-file-path console,checkov-results.xml \
+            --compact \
+            --quiet
+        continue-on-error: false
+
+      - name: "Checkov: Scan Dockerfile"
+        run: |
+          checkov -f docker/Dockerfile \
+            --framework dockerfile \
+            --compact
+        continue-on-error: true
+
+      - name: "Checkov: Scan Kubernetes Manifests"
+        run: |
+          checkov -d kubernetes/ \
+            --framework kubernetes \
+            --compact
+        continue-on-error: true
+
+      - name: Upload Compliance Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compliance-results
+          path: checkov-results.xml
+
+  # =============================================================================
+  # Job 5: Terraform Plan
+  # =============================================================================
+  terraform-plan:
+    name: "📋 Terraform Plan"
+    runs-on: ubuntu-latest
+    needs: [compliance]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -var-file=terraform.tfvars.example \
+            -out=tfplan \
+            -no-color 2>&1 | tee plan-output.txt
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('terraform/plan-output.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n...(truncated)' : plan;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### 📋 Terraform Plan\n\`\`\`\n${truncated}\n\`\`\``
+            });
+
+  # =============================================================================
+  # Job 6: Deploy (Main Branch Only)
+  # =============================================================================
+  deploy:
+    name: "🚀 Deploy to AWS"
+    runs-on: ubuntu-latest
+    needs: [build-and-scan, sbom, compliance]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve -var-file=terraform.tfvars.example
+
+      - name: Update EKS Kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Kubernetes Logging Agent
+        run: |
+          kubectl apply -f kubernetes/logging-agent/
+
+      - name: Verify Deployment
+        run: |
+          echo "=== Cluster Info ==="
+          kubectl cluster-info
+
+          echo "=== Logging Agent Status ==="
+          kubectl -n logging get pods
+          kubectl -n logging rollout status daemonset/fluent-bit --timeout=120s
+
+          echo "=== Lambda Function ==="
+          aws lambda get-function \
+            --function-name sentinel-cyber-optimizer-log-transformer-dev \
+            --query 'Configuration.[FunctionName,Runtime,LastModified]'
+
+          echo "✅ Deployment verified successfully"

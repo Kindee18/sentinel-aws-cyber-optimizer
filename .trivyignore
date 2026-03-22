@@ -1,0 +1,6 @@
+# Trivy Ignore File — Known/Accepted Vulnerabilities
+# Format: CVE-ID
+# Add CVEs here that have been reviewed and accepted as low-risk
+
+# Example (uncomment if applicable):
+# CVE-2023-XXXXX  # Accepted: low severity, no exploit path in this context
