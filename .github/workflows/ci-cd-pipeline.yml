@@ -47,8 +47,8 @@ jobs:
 
       - name: Security Lint (Bandit)
         run: |
-          bandit -r lambda/ -x lambda/tests/ -ll -f json -o bandit-report.json || true
-          bandit -r lambda/ -x lambda/tests/ -lm
+          bandit -r lambda/ -x lambda/tests/ -f json -o bandit-report.json || true
+          bandit -r lambda/ -x lambda/tests/ -l medium
 
       - name: Dependency Safety Check
         run: |
