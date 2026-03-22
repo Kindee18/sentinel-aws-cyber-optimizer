@@ -119,14 +119,16 @@ jobs:
             trivy-results.sarif
 
       - name: "📦 Upload SBOM to S3"
-        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
+        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: S3 Copy
-        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
+        if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
+        continue-on-error: true
         run: |
           aws s3 cp sentinel-optimizer-sbom.json \
             s3://${{ secrets.SBOM_BUCKET }}/sboms/${{ github.sha }}.json || true
@@ -190,7 +192,7 @@ jobs:
     name: "🚀 Build & Deploy to AWS"
     runs-on: ubuntu-latest
     needs: [artifact-pipeline, compliance]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository == 'Kindee18/sentinel-aws-cyber-optimizer'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
