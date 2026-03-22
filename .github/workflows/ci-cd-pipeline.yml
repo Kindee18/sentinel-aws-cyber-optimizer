@@ -105,9 +105,8 @@ jobs:
         with:
           images: ${{ env.ECR_REPOSITORY }}
           tags: |
-            type=sha,prefix={{branch}}-
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=raw,value=latest
+            type=sha,format=long
 
       - name: Build Docker Image
         id: build
