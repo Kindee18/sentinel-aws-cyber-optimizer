@@ -28,9 +28,9 @@ Sentinel-AWS Cyber-Optimizer is an enterprise-grade cloud security system that d
 
 | Capability | Implementation |
 |---|---|
-| **Multi-Tenant Architecture** | Simulated multi-account AWS with provider aliases + per-tenant S3 prefixes |
-| **FinOps Optimization** | Lambda log transformer reduces SIEM ingestion costs by filtering noise logs |
-| **Workload Identity** | OIDC-based IRSA — zero hardcoded credentials in Kubernetes |
+| **Multi-Tenant Isolation** | Simulated multi-account AWS with provider aliases + per-tenant S3 prefixes for complete data segregation |
+| **Agentic SOC Ready** | Intelligent Lambda filtering serves as the automated data layer for AI-driven security operations |
+| **Zero-Trust IaC** | OIDC-based IRSA — zero hardcoded credentials in Kubernetes using identity-based access |
 | **Supply Chain Security** | Trivy vulnerability scanning + Syft SBOM generation (CycloneDX) |
 | **Compliance-as-Code** | Checkov policy enforcement with automated pipeline gating |
 | **SIEM Integration** | S3 → SQS event bridge for Microsoft Sentinel ingestion |
@@ -384,6 +384,7 @@ The FinOps optimization pipeline delivers measurable cost reduction:
 | Optimization | Mechanism | Impact |
 |---|---|---|
 | **Log noise filtering** | Drop HTTP 2XX responses | ~60-70% volume reduction |
+| **Data Enrichment** | Agentic SOC Ready intelligent tagging | High-fidelity alerting |
 | **GZIP compression** | Firehose compression | ~80% storage reduction |
 | **S3 lifecycle** | Auto-transition to Glacier | ~70% long-term storage savings |
 | **SQS long polling** | Reduce API calls | ~60% SQS cost reduction |
