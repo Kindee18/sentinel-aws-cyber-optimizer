@@ -268,7 +268,12 @@ cd ../lambda
 pip install pytest
 python -m pytest tests/ -v
 
-# 7. Trigger the CI/CD pipeline
+# 7. Configure GitHub Secrets (Automated)
+# Setup the required CI/CD security secrets in one command:
+chmod +x scripts/setup-secrets.sh
+./scripts/setup-secrets.sh
+
+# 8. Trigger the CI/CD pipeline
 git add . && git commit -m "Deploy sentinel security infrastructure"
 git push origin main
 ```
