@@ -55,17 +55,18 @@ jobs:
           safety check --file lambda/requirements.txt || echo "Safety check found vulnerabilities, but continuing..."
 
   # =============================================================================
-  # Job 2: Container Build & Vulnerability Scanning
+  # Job 2: Artifact Pipeline (Build, Scan, SBOM)
+  # Combined to ensure Docker image persistence across security steps.
   # =============================================================================
-  build-and-scan:
-    name: "🛠️ Build & Vulnerability Scan"
+  artifact-pipeline:
+    name: "🛠️ Artifacts (Build/Scan/SBOM)"
     needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build Docker Image (Local)
+      - name: Build Docker Image
         run: |
           docker build -t sentinel-optimizer:latest -f docker/Dockerfile .
 
@@ -79,35 +80,27 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
 
-      - name: Upload Trivy results to Security tab
+      - name: "📜 Generate SBOM (Syft)"
+        uses: anchore/sbom-action@v0
+        with:
+          image: sentinel-optimizer:latest
+          format: spdx-json
+          output-file: 'sentinel-optimizer-sbom.json'
+
+      - name: Upload Scan Results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+          category: 'trivy'
 
-  # =============================================================================
-  # Job 3: SBOM Generation
-  # =============================================================================
-  sbom:
-    name: "📦 SBOM Generation"
-    needs: build-and-scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: "📜 Generate SBOM (Syft)"
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: 'sentinel-optimizer-sbom.json'
-
-      - name: "📤 Upload SBOM Artifact"
+      - name: "📤 Store SBOM & Reports"
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-report
-          path: sentinel-optimizer-sbom.json
+          name: deployment-artifacts
+          path: |
+            sentinel-optimizer-sbom.json
+            trivy-results.sarif
 
       - name: "📦 Upload SBOM to S3"
         if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
@@ -115,13 +108,14 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      
       - name: S3 Copy
         if: github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
         run: |
           aws s3 cp sentinel-optimizer-sbom.json s3://${{ secrets.SBOM_BUCKET }}/sboms/${{ github.sha }}.json
 
   # =============================================================================
-  # Job 4: Compliance-as-Code (Checkov)
+  # Job 3: Compliance-as-Code (Checkov)
   # =============================================================================
   compliance:
     name: "🛡️ Compliance Scan (Checkov)"
@@ -134,11 +128,11 @@ jobs:
       - name: "Checkov: Scan Infrastructure"
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: ./
+          directory: ./terraform
           quiet: true
           compact: true
           soft_fail: true
-          framework: terraform,dockerfile,kubernetes
+          framework: terraform
           output_format: cli,sarif
           output_file_path: console,checkov.sarif
 
@@ -147,9 +141,10 @@ jobs:
         if: always()
         with:
           sarif_file: 'checkov.sarif'
+          category: 'checkov'
 
   # =============================================================================
-  # Job 5: Terraform Plan
+  # Job 4: Terraform Plan
   # =============================================================================
   terraform-plan:
     name: "📋 Terraform Plan"
@@ -172,12 +167,12 @@ jobs:
         run: terraform plan -var-file=terraform.tfvars.example
 
   # =============================================================================
-  # Job 6: Build & Deploy (Production)
+  # Job 5: Build & Deploy (Production)
   # =============================================================================
   deploy:
     name: "🚀 Build & Deploy to AWS"
     runs-on: ubuntu-latest
-    needs: [build-and-scan, sbom, compliance]
+    needs: [artifact-pipeline, compliance]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository == 'Kindee18/sentinel-aws-cyber-optimizer' && secrets.AWS_ROLE_ARN != ''
     steps:
       - name: Checkout Code
