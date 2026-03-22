@@ -41,6 +41,8 @@ Sentinel-AWS Cyber-Optimizer is an enterprise-grade cloud security system that d
 
 ![Sentinel-AWS Cyber-Optimizer Architecture](./architecture-diagram.png)
 
+[📄 Download High-Resolution Architecture Diagram (PDF)](./bluevoyant.pdf)
+
 <details>
 <summary>Text-based architecture reference (click to expand)</summary>
 
