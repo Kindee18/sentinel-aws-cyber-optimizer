@@ -99,7 +99,7 @@ jobs:
           echo "::endgroup::"
           echo "::group::📜 Generating SBOM"
           syft sentinel-optimizer:latest \
-            -o spdx-json=sentinel-optimizer-sbom.json || true
+            -o cyclonedx-json=sentinel-optimizer-sbom.json || true
           echo "::endgroup::"
 
       - name: Upload Scan Results (SARIF)
