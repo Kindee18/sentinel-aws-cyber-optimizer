@@ -354,6 +354,29 @@ To run the *actual* `.github/workflows/ci-cd-pipeline.yml` in local Docker conta
 
 ---
 
+## 🧪 End-to-End Validation
+
+To prioritize the **Cyber-Optimizer** in action, deploy the Mock Log Generator to your EKS cluster. This application produces "dirty" logs (PII and status codes) specifically designed to test the pipeline.
+
+### 1. Deploy the Mock App
+```bash
+kubectl apply -f kubernetes/mock-app.yaml
+```
+
+### 2. Verify Log Production
+Ensure the mock app is running and printing sample records:
+```bash
+kubectl logs -l app=mock-security-app -n mock-app -f
+```
+
+### 3. Observe the Cyber-Optimizer (Lambda)
+Watch the transformation in the S3 bucket:
+*   **Filtering**: `HTTP 200` health check logs will be **silently dropped**.
+*   **Redaction**: Emails and Internal IPs will be **masked** (e.g., `[REDACTED]`).
+*   **Alerting**: `HTTP 401/500` logs will be retained and forwarded to Microsoft Sentinel.
+
+---
+
 ## Cost Optimization
 
 The FinOps optimization pipeline delivers measurable cost reduction:

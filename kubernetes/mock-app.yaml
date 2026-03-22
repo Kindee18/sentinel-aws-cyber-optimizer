@@ -1,0 +1,59 @@
+# =============================================================================
+# Mock Security Application — Log Generator
+# Produces "dirty" logs (PII, Noise, Anomalies) for pipeline verification
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mock-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-security-app
+  namespace: mock-app
+  labels:
+    app: mock-security-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-security-app
+  template:
+    metadata:
+      labels:
+        app: mock-security-app
+    spec:
+      containers:
+      - name: logger
+        image: python:3.12-slim
+        command: ["python3", "-c"]
+        args:
+        - |
+          import time
+          import json
+          import random
+
+          logs = [
+              {"status": 200, "message": "Health check OK", "path": "/health"},
+              {"status": 200, "message": "User login success", "user": "admin@bluevoyant.com", "ip": "10.0.5.12"},
+              {"status": 401, "message": "Unauthorized access attempt", "ip": "192.168.1.105", "target": "/admin/config"},
+              {"status": 500, "message": "Database connection timeout", "db_host": "172.31.45.2"},
+              {"status": 404, "message": "File not found", "path": "/etc/passwd"},
+              {"status": 200, "message": "Transaction processed", "card": "4532-1234-5678-9012", "amount": 125.50}
+          ]
+
+          print("--- Starting Mock Log Generator ---", flush=True)
+          while True:
+              log_entry = random.choice(logs)
+              # Add a high-precision timestamp
+              log_entry["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+              print(json.dumps(log_entry), flush=True)
+              time.sleep(5)
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
