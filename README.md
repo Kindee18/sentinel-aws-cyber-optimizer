@@ -151,6 +151,10 @@ sentinel-aws-cyber-optimizer/
 │       ├── log-ingestion/              # S3 bucket + SQS queue
 │       └── firehose/                   # Kinesis Firehose + Lambda
 │
+├── docs/                               # Project documentation
+│   ├── executive_summary.md            # BlueVoyant MDR 1-pager
+│   └── project_learning_summary.md     # Engineering ledger & lessons learned
+│
 ├── lambda/                             # Log transformation function
 │   ├── log_transformer.py              # PII redaction + noise filtering
 │   ├── requirements.txt                # Python dependencies
@@ -158,6 +162,7 @@ sentinel-aws-cyber-optimizer/
 │       └── test_log_transformer.py     # Unit tests
 │
 ├── kubernetes/                         # Kubernetes manifests
+│   ├── mock-app.yaml                   # End-to-End Log Generator
 │   └── logging-agent/
 │       ├── namespace.yaml              # Logging namespace
 │       ├── service-account.yaml        # IRSA-annotated ServiceAccount
@@ -176,6 +181,7 @@ sentinel-aws-cyber-optimizer/
 │       ├── failing_example.tf          # Intentionally non-compliant
 │       └── passing_example.tf          # Compliant reference
 │
+├── bluevoyant.pdf                      # High-Resolution Architecture Diagram
 ├── .trivyignore                        # Accepted vulnerability exceptions
 └── README.md                           # This file
 ```
@@ -361,7 +367,7 @@ To run the *actual* `.github/workflows/ci-cd-pipeline.yml` in local Docker conta
 
 ## 🧪 End-to-End Validation
 
-To prioritize the **Cyber-Optimizer** in action, deploy the Mock Log Generator to your EKS cluster. This application produces "dirty" logs (PII and status codes) specifically designed to test the pipeline.
+To experience the **Cyber-Optimizer** in action, deploy the Mock Log Generator to your EKS cluster. This application produces "dirty" logs (PII and status codes) specifically designed to test the pipeline.
 
 ### 1. Deploy the Mock App
 ```bash
