@@ -33,14 +33,14 @@ kubectl apply -f kubernetes/mock-app.yaml
 ```
 
 ### Step 2: Validate the Log Generation
-Show the audience that the raw application is actively outputting critical PII and benign noise directly into the cluster `stdout`.
+The raw application is actively outputting critical PII and benign noise directly into the cluster `stdout`.
 ```bash
 kubectl logs -l app=mock-security-app -n mock-app -f
 ```
 *(Point out the `HTTP 200` lines and the raw IP addresses).*
 
 ### Step 3: Trigger the Pipeline
-Explain that **Fluent-Bit** automatically picks up these logs via the DaemonSet and streams them into **Amazon Kinesis**. The stream triggers our internal **Lambda Transformer**.
+**Fluent-Bit** automatically picks up these logs via the DaemonSet and streams them into **Amazon Kinesis**. The stream triggers our internal **Lambda Transformer**.
 
 ### Step 4: Validate the Output (S3 / Sentinel)
 Navigate to the designated AWS S3 Storage Bucket (or the mock Sentinel dashboard) where the processed logs land.
