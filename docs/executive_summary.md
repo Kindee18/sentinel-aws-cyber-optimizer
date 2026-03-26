@@ -24,8 +24,6 @@ BlueVoyant leads the industry in **Microsoft Security** integration, Supply Chai
 
 ## 🎬 Live Demo Script: The Optimizer in Action
 
-*Follow this 4-step script during a live interview or presentation to demonstrate the architecture.*
-
 ### Step 1: Deploy the "Dirty Data" Generator
 Deploy a mock application to the EKS cluster. This application systematically creates HTTP 200s, HTTP 401 Unauthorized errors, and leaks sensitive PII (Social Security Numbers, AWS access keys, internal IPs).
 ```bash
@@ -48,4 +46,3 @@ Open a processed log item and demonstrate two things:
 1.  **Noise is Gone:** There are no `HTTP 200` health checks in the bucket. They were successfully annihilated at the edge.
 2.  **PII is Redacted:** Look at the `HTTP 401` logs. The raw IP address and users' emails have been algorithmically replaced with `[REDACTED_IPV4]` and `[REDACTED_EMAIL]`, ensuring compliance (GDPR/HIPAA/PCI) before the data hits the SIEM.
 
-**Demo Complete. The system is secure, quiet, and optimized.**
