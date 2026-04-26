@@ -35,7 +35,7 @@ Sentinel-AWS Cyber-Optimizer is an enterprise-grade cloud security system that d
 | **Compliance-as-Code** | Checkov policy enforcement with automated pipeline gating |
 | **SIEM Integration** | S3 → SQS event bridge for Microsoft Sentinel ingestion |
 
-## 🎯 Why BlueVoyant Cares (Strategic Alignment)
+## 🎯 Strategic Alignment
 *   **Agentic SOC Ready:** Rather than dumping raw data into a data lake for human analysts to parse, this pipeline pre-processes, redacts PII, and categorizes data at the edge. **Microsoft Sentinel** receives high-fidelity alerts ready for automated SOAR playbooks.
 *   **Supply Chain Defense:** The CI/CD pipeline proactively scans containers for CVEs (Trivy) and generates Software Bills of Materials (Syft/CycloneDX) unconditionally, shifting security left before code ever touches production.
 *   **Cost Efficiency:** By terminating benign noise at the AWS edge before it ever traverses to Microsoft Sentinel, clients see a **60–70% immediate reduction in SIEM ingestion costs**.
